@@ -2,7 +2,7 @@
 const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
 export const API_BASE = import.meta.env.DEV 
   ? `http://${currentHost}:8787` 
-  : 'https://ripple-worker.reha-mobileuser.workers.dev';
+  : ''; // Pages Functionsの場合は空（同一ドメイン）でOK
 
 export const hostLogin = async (password: string) => {
   // 簡易認証（ハードコード）
