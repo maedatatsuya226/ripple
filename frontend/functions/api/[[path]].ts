@@ -18,10 +18,43 @@ export const onRequest = async (context: any) => {
 
   // APIパスの正規化
   const pathname = url.pathname;
+
+  // ---- ゲスト機能エンドポイント（roomId不要） ----
+
+  // ゲストトークン発行 (管理者専用)
+  if (pathname === '/api/host/create_guest' && request.method === 'POST') {
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+      .map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
+    await env.RIPPLE_KV.put(
+      `GUEST_TOKEN:${token}`,
+      JSON.stringify({ valid: true, createdAt: Date.now() }),
+      { expirationTtl: 604800 } // 7日
+    );
+    const guestUrl = `${url.origin}/host?guest=${token}`;
+    return new Response(JSON.stringify({ url: guestUrl }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // ゲストアクセス時: トークン検証 & ルームID払い出し
+  if (pathname === '/api/guest/enter' && request.method === 'GET') {
+    const token = url.searchParams.get('guest');
+    if (!token) return new Response(JSON.stringify({ valid: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const data = await env.RIPPLE_KV.get(`GUEST_TOKEN:${token}`);
+    if (!data) return new Response(JSON.stringify({ valid: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // 訪問者ごとにユニークなルームIDを払い出す
+    const shortId = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+      .map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 6);
+    const roomId = `guest-${shortId}`;
+    return new Response(JSON.stringify({ valid: true, roomId }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // ---- 通常API (roomId必須) ----
   const roomId = url.searchParams.get('room');
 
   if (pathname.startsWith('/api/') && !roomId) {
-    if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
     return new Response('Missing room parameter', { status: 400, headers: corsHeaders });
   }
 

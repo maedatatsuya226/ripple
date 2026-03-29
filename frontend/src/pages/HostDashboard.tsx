@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRippleStream, type AppState } from '../hooks/useRipple';
-import { hostLogin, updateHostState, clearResponses, saveQuestions, getQuestions } from '../api';
+import { hostLogin, updateHostState, clearResponses, saveQuestions, getQuestions, createGuestToken, enterAsGuest } from '../api';
 import { useTheme, themes, type ThemeName } from '../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
@@ -274,6 +274,8 @@ export function HostDashboard() {
 
   const [roomIdInput, setRoomIdInput] = useState(initialRoomId);
   const [roomId, setRoomId] = useState('');
+  const [guestLinkUrl, setGuestLinkUrl] = useState('');
+  const [showGuestModal, setShowGuestModal] = useState(false);
   
   const { state, responses } = useRippleStream(roomId);
   const { theme, setTheme } = useTheme();
@@ -283,6 +285,38 @@ export function HostDashboard() {
   const [showEditor, setShowEditor] = useState(false);
   const [currentQIndex, setCurrentQIndex] = useState<number | null>(null);
   const [tab, setTab] = useState<'control' | 'questions'>('control');
+
+  // ゲストURL経由のアクセス時: パスワードなしで自動ログイン
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const guestToken = params.get('guest');
+    if (!guestToken) return;
+
+    const storageKey = `ripple_guest_room_${guestToken}`;
+    const savedRoomId = localStorage.getItem(storageKey);
+
+    if (savedRoomId) {
+      // 2回目以降: 保存済みルームIDで即ログイン
+      setRoomId(savedRoomId);
+      setRoomIdInput(savedRoomId);
+      setIsAuthenticated(true);
+      getQuestions(savedRoomId).then(qs => setQuestions(Array.isArray(qs) ? qs : []));
+    } else {
+      // 初回: APIでルームID払い出し
+      enterAsGuest(guestToken).then(result => {
+        if (result?.valid) {
+          localStorage.setItem(storageKey, result.roomId);
+          setRoomId(result.roomId);
+          setRoomIdInput(result.roomId);
+          setIsAuthenticated(true);
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('room', result.roomId);
+          newUrl.searchParams.delete('guest');
+          window.history.replaceState({}, '', newUrl);
+        }
+      });
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -384,6 +418,12 @@ export function HostDashboard() {
               </button>
             ))}
           </div>
+          {/* ゲスト招待ボタン */}
+          <button onClick={async () => {
+            const result = await createGuestToken();
+            if (result?.url) { setGuestLinkUrl(result.url); setShowGuestModal(true); }
+          }} className="px-4 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
+            style={{ backgroundColor: `${theme.accent2}25`, border: `1px solid ${theme.accent2}60`, color: theme.accent2 }}>⚡ ゲスト招待リンク</button>
           <div className="px-4 py-2 rounded-xl flex items-center gap-2" style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}` }}>
             <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></span>
             <span className="font-bold">{responses.length}<span className="text-sm opacity-60 ml-1">票</span></span>
@@ -392,6 +432,34 @@ export function HostDashboard() {
             style={{ backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }}>Reset</button>
         </div>
       </header>
+
+      {/* ゲスト招待モーダル */}
+      <AnimatePresence>
+        {showGuestModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center z-50 px-4" style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+            onClick={() => setShowGuestModal(false)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              style={{ ...panelStyle, boxShadow: theme.glowAccent }} className="p-8 max-w-lg w-full"
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-2xl font-black mb-2" style={{ color: theme.accent2 }}>⚡ ゲスト招待リンク</h3>
+              <p className="text-sm mb-6 leading-relaxed" style={{ color: theme.textMuted }}>
+                このURLをグループに送ってください。アクセスした人それぞれに<br/>専用ルームが自動で割り当てられます。<span className="font-bold" style={{ color: theme.accent1 }}>有効期限: 7日間</span>
+              </p>
+              <div className="flex gap-2 mb-4">
+                <input readOnly value={guestLinkUrl}
+                  className="flex-1 px-3 py-2 rounded-xl text-xs font-mono"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}`, color: theme.text }} />
+                <button onClick={() => { navigator.clipboard.writeText(guestLinkUrl); }}
+                  className="px-4 py-2 rounded-xl font-black text-sm whitespace-nowrap"
+                  style={{ backgroundColor: theme.accent1, color: 'white' }}>コピー 📋</button>
+              </div>
+              <button onClick={() => setShowGuestModal(false)} className="w-full py-2 rounded-xl text-sm font-bold"
+                style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: theme.textMuted }}>閉じる</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 flex-1">
         {/* 左サイドバー */}

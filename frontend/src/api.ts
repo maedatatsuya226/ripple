@@ -40,3 +40,17 @@ export const submitVote = async (roomId: string, sessionId: string, answer: any)
 export const clearResponses = async (roomId: string) => {
   await fetch(`${API_BASE}/api/host/clear_responses?room=${roomId}`, { method: 'POST' });
 };
+
+// ---- ゲスト招待リンク機能 ----
+
+export const createGuestToken = async (): Promise<{ url: string } | null> => {
+  const res = await fetch(`${API_BASE}/api/host/create_guest`, { method: 'POST' });
+  if (!res.ok) return null;
+  return res.json();
+};
+
+export const enterAsGuest = async (token: string): Promise<{ valid: boolean; roomId: string } | null> => {
+  const res = await fetch(`${API_BASE}/api/guest/enter?guest=${token}`);
+  if (!res.ok) return null;
+  return res.json();
+};
