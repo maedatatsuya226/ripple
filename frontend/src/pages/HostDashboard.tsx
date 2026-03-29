@@ -4,6 +4,7 @@ import { hostLogin, updateHostState, clearResponses, saveQuestions } from '../ap
 import { useTheme, themes, type ThemeName } from '../contexts/ThemeContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 
 type QuestionType = 'choice' | 'wordcloud' | 'quiz' | 'opentext' | 'slider';
 
@@ -177,7 +178,7 @@ function ResultDisplay({ question, responses, theme, showCorrectAnswer = true }:
         {words.length === 0 && <p className="text-xl font-bold opacity-50">回答を待っています...</p>}
         <div className="flex flex-wrap justify-center items-center content-center gap-x-4 gap-y-4 w-full h-full">
           <AnimatePresence>
-            {words.map(([text, count], i) => {
+            {words.map(([text, count]) => {
               const ratio = count / maxCount;
               // 1rem ~ 6remでサイズを可変
               const size = 1 + ratio * 5; 
@@ -273,6 +274,16 @@ export function HostDashboard() {
 
   const panelStyle = { backgroundColor: theme.surface, border: `1px solid ${theme.border}`, backdropFilter: 'blur(20px)', borderRadius: '1.25rem' };
 
+  const participantUrl = window.location.origin;
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen();
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center w-full relative z-10">
@@ -356,14 +367,18 @@ export function HostDashboard() {
                 </motion.button>
               </div>
 
-              {/* QRコードプレースホルダー */}
-              <div style={panelStyle} className="p-3 mt-2">
-                <div className="aspect-square bg-white rounded-xl p-3 flex items-center justify-center">
-                  <div className="w-full h-full border-4 border-dashed border-gray-300 flex items-center justify-center rounded-lg">
-                    <p className="font-black text-gray-400 text-xs tracking-widest">QR CODE</p>
-                  </div>
+              {/* QRコード表示 */}
+              <div style={panelStyle} className="p-4 mt-2 flex flex-col items-center">
+                <div className="bg-white p-3 rounded-xl shadow-inner mb-3">
+                  <QRCodeSVG value={participantUrl} size={160} level="H" />
                 </div>
-                <p className="text-center mt-2 font-bold text-xs tracking-widest" style={{ color: theme.textMuted }}>SCAN TO JOIN</p>
+                <p className="text-center font-black text-xs tracking-widest mb-1" style={{ color: theme.text }}>SCAN TO JOIN</p>
+                <p className="text-[10px] opacity-60 font-mono break-all text-center leading-tight" style={{ color: theme.textMuted }}>{participantUrl}</p>
+                
+                <button onClick={toggleFullscreen} className="mt-4 w-full py-2 rounded-xl text-xs font-bold transition-colors"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: `1px solid ${theme.border}`, color: theme.textMuted }}>
+                  📺 フルスクリーン切替
+                </button>
               </div>
             </div>
           )}

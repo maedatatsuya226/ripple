@@ -1,5 +1,8 @@
 // Cloudflare Workerのローカル・本番URL
-export const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : 'https://ripple-worker.reha-mobileuser.workers.dev';
+const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+export const API_BASE = import.meta.env.DEV 
+  ? `http://${currentHost}:8787` 
+  : 'https://ripple-worker.reha-mobileuser.workers.dev';
 
 export const hostLogin = async (password: string) => {
   // 簡易認証（ハードコード）

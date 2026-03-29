@@ -4,5 +4,5 @@ compatibility_date = "2024-03-25"
 
 [[kv_namespaces]]
 binding = "RIPPLE_KV"
-id = "PREVIEW_ID"
-preview_id = "PREVIEW_ID"
+id = "fe0289951cd44ccbb3a9e28a888f826f"
+preview_id = "fe0289951cd44ccbb3a9e28a888f826f"
