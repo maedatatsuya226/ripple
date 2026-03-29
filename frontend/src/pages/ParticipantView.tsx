@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRippleStream } from '../hooks/useRipple';
-import { submitVote } from '../api';
+import { submitVote, sendReaction } from '../api';
 import { useTheme } from '../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle } from 'lucide-react';
@@ -280,6 +280,24 @@ export function ParticipantView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* リアクションボタン (盛り上げ用) */}
+      {isConnected && roomId && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex gap-3 p-2 rounded-full z-50 shadow-2xl"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', border: `1px solid ${theme.border}` }}>
+          {['👏', '🎉', '🔥', '❤️', '🙌'].map(emoji => (
+            <motion.button
+              key={emoji}
+              whileHover={{ scale: 1.25, y: -5 }}
+              whileTap={{ scale: 0.85 }}
+              onClick={() => sendReaction(roomId, emoji)}
+              className="text-2xl w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+            >
+              {emoji}
+            </motion.button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

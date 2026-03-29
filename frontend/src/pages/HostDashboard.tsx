@@ -267,6 +267,35 @@ function ResultDisplay({ question, responses, theme, showCorrectAnswer = true }:
   );
 }
 
+// ---- リアクション演出コンポーネント ----
+function ReactionShower({ reactions }: { reactions: any[] }) {
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
+      <AnimatePresence>
+        {reactions.map((r) => (
+          <motion.div
+            key={r.id}
+            initial={{ y: '100vh', x: `${20 + Math.random() * 60}vw`, opacity: 0, scale: 0.5, rotate: 0 }}
+            animate={{ 
+              y: '-10vh', 
+              x: `${20 + Math.random() * 60 + (Math.random() - 0.5) * 20}vw`, 
+              opacity: [0, 1, 1, 0],
+              scale: [0.5, 1.5, 1.2, 1],
+              rotate: (Math.random() - 0.5) * 45
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 3 + Math.random() * 2, ease: "easeOut" }}
+            className="absolute text-5xl filter drop-shadow-lg"
+            style={{ textShadow: '0 0 20px rgba(255,255,255,0.4)' }}
+          >
+            {r.emoji}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ---- メインホストダッシュボード ----
 export function HostDashboard() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -280,14 +309,47 @@ export function HostDashboard() {
   
   const isGuestAdmin = roomId.startsWith('guest-');
   
-  const { state, responses } = useRippleStream(roomId);
-  const { theme, setTheme } = useTheme();
-  const [password, setPassword] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [templates, setTemplates] = useState<{name: string, questions: Question[]}[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [currentQIndex, setCurrentQIndex] = useState<number | null>(null);
   const [tab, setTab] = useState<'control' | 'questions'>('control');
+  
+  const { theme, setTheme } = useTheme();
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const { state, responses, reactions } = useRippleStream(roomId);
+
+  // テンプレートの読み込み
+  useEffect(() => {
+    const saved = localStorage.getItem('ripple_templates');
+    if (saved) setTemplates(JSON.parse(saved));
+  }, []);
+
+  const saveToTemplate = () => {
+    const name = prompt('テンプレート名を入力してください', `マイテンプレート ${templates.length + 1}`);
+    if (!name || questions.length === 0) return;
+    const next = [...templates, { name, questions }];
+    setTemplates(next);
+    localStorage.setItem('ripple_templates', JSON.stringify(next));
+    alert('保存しました！');
+  };
+
+  const loadTemplate = (templateQuestions: Question[]) => {
+    if (confirm('現在の問題リストを上書きしてテンプレートを読み込みますか？')) {
+      setQuestions(templateQuestions);
+      saveQuestions(roomId, templateQuestions);
+    }
+  };
+
+  const deleteTemplate = (idx: number) => {
+    if (confirm('このテンプレートを削除しますか？')) {
+      const next = templates.filter((_, i) => i !== idx);
+      setTemplates(next);
+      localStorage.setItem('ripple_templates', JSON.stringify(next));
+    }
+  };
 
   // ゲストURL経由のアクセス時: パスワードなしで自動ログイン
   useEffect(() => {
@@ -408,6 +470,9 @@ export function HostDashboard() {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 lg:p-8 flex flex-col min-h-screen relative z-10">
+      {/* リアクション演出 */}
+      <ReactionShower reactions={reactions} />
+
       {/* ヘッダー */}
       <header className="flex justify-between items-center mb-6 p-4 rounded-2xl" style={panelStyle}>
         <h1 className="text-2xl font-black tracking-wider" style={{ color: theme.accent1 }}>🌊 Ripple Host</h1>
@@ -552,11 +617,37 @@ export function HostDashboard() {
 
           {tab === 'questions' && (
             <div style={panelStyle} className="flex flex-col gap-3 p-4 flex-1 overflow-y-auto max-h-[600px]">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-sm" style={{ color: theme.text }}>問題一覧 ({questions.length})</h3>
-                <button onClick={() => setShowEditor(true)} className="px-3 py-1.5 rounded-xl font-bold text-xs"
-                  style={{ backgroundColor: theme.accent1, color: 'white' }}>＋ 追加</button>
+              <div className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 mb-2">
+                <div className="flex flex-col">
+                  <h3 className="font-bold text-sm" style={{ color: theme.text }}>問題一覧 ({questions.length})</h3>
+                  <p className="text-[10px] opacity-40 uppercase font-black" style={{ color: theme.textMuted }}>Questions List</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={saveToTemplate} className="px-3 py-1.5 rounded-xl font-bold text-xs"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: theme.text, border: `1px solid ${theme.border}` }}>💾 保存</button>
+                  <button onClick={() => setShowEditor(true)} className="px-3 py-1.5 rounded-xl font-bold text-xs"
+                    style={{ backgroundColor: theme.accent1, color: 'white' }}>＋ 追加</button>
+                </div>
               </div>
+
+              {/* テンプレート読み込みエリア */}
+              {templates.length > 0 && (
+                <div className="mb-4 flex flex-col gap-2">
+                  <p className="text-[10px] font-bold opacity-40" style={{ color: theme.textMuted }}>🚀 保存済みテンプレート</p>
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    {templates.map((t, i) => (
+                      <div key={i} className="flex-none group relative">
+                        <button onClick={() => loadTemplate(t.questions)} className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-125"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: `1px dotted ${theme.border}`, color: theme.text }}>
+                          {t.name}
+                        </button>
+                        <button onClick={() => deleteTemplate(i)} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {questions.length === 0 && (
                 <p className="text-xs text-center py-8" style={{ color: theme.textMuted }}>まだ問題がありません。「＋ 追加」で作成してください。</p>
               )}

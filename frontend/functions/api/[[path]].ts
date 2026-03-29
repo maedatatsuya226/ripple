@@ -82,6 +82,7 @@ export const onRequest = async (context: any) => {
   const STATE_KEY = `ROOM_${roomId}_STATE`;
   const RESP_KEY = `ROOM_${roomId}_RESPONSES`;
   const Q_KEY = `ROOM_${roomId}_QUESTIONS`;
+  const REACT_KEY = `ROOM_${roomId}_REACTIONS`;
 
   // SSE (Server-Sent Events)
   if (pathname === '/api/stream' && request.method === 'GET') {
@@ -102,9 +103,19 @@ export const onRequest = async (context: any) => {
         for (let i = 0; i < 1200; i++) {
           const currentStateRaw = await env.RIPPLE_KV.get(STATE_KEY) || '{"status": "waiting"}';
           const responsesRaw = await env.RIPPLE_KV.get(RESP_KEY) || '[]';
-          const payload = JSON.stringify({ state: JSON.parse(currentStateRaw), responses: JSON.parse(responsesRaw) });
+          // リアクションを取得して即座に消去 (擬似メッセージキュー)
+          const reactionsRaw = await env.RIPPLE_KV.get(REACT_KEY) || '[]';
+          if (reactionsRaw !== '[]') {
+             await env.RIPPLE_KV.delete(REACT_KEY);
+          }
           
-          if (payload !== lastStateString || i % 10 === 0) {
+          const payload = JSON.stringify({ 
+            state: JSON.parse(currentStateRaw), 
+            responses: JSON.parse(responsesRaw),
+            reactions: JSON.parse(reactionsRaw)
+          });
+          
+          if (payload !== lastStateString || i % 10 === 0 || reactionsRaw !== '[]') {
             await writer.write(encoder.encode(`data: ${payload}\n\n`));
             lastStateString = payload;
           }
@@ -118,6 +129,23 @@ export const onRequest = async (context: any) => {
     })());
 
     return new Response(readable, { headers });
+  }
+
+  // リアクション送信API
+  if (pathname === '/api/reaction' && request.method === 'POST') {
+    try {
+      const { emoji } = await request.json() as any;
+      const reactionsRaw = await env.RIPPLE_KV.get(REACT_KEY) || '[]';
+      let reactions: any[] = JSON.parse(reactionsRaw);
+      reactions.push({ emoji, id: Math.random().toString(36).substring(7), timestamp: Date.now() });
+      // 直近30個くらいに制限
+      if (reactions.length > 30) reactions = reactions.slice(-30);
+      
+      await env.RIPPLE_KV.put(REACT_KEY, JSON.stringify(reactions), { expirationTtl: 300 });
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    } catch (e) {
+      return new Response('Bad Request', { status: 400, headers: corsHeaders });
+    }
   }
 
   // 各種APIエンドポイント

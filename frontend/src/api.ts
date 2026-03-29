@@ -57,6 +57,14 @@ export const createGuestToken = async (days: number): Promise<{ url: string } | 
   return res.json();
 };
 
+export const sendReaction = async (roomId: string, emoji: string) => {
+  await fetch(`${API_BASE}/api/reaction?room=${roomId}`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji })
+  });
+};
+
+
 export const enterAsGuest = async (token: string): Promise<{ valid: boolean; roomId: string } | null> => {
   const res = await fetch(`${API_BASE}/api/guest/enter?guest=${token}`);
   if (!res.ok) return null;

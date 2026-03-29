@@ -17,9 +17,16 @@ export interface AppResponse {
   timestamp: number;
 }
 
+export interface AppReaction {
+  id: string;
+  emoji: string;
+  timestamp: number;
+}
+
 export function useRippleStream(roomId: string) {
   const [state, setState] = useState<AppState>({ status: 'waiting' });
   const [responses, setResponses] = useState<AppResponse[]>([]);
+  const [reactions, setReactions] = useState<AppReaction[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -34,6 +41,13 @@ export function useRippleStream(roomId: string) {
         const data = JSON.parse(e.data);
         if (data.state) setState(data.state);
         if (data.responses) setResponses(data.responses);
+        if (data.reactions && data.reactions.length > 0) {
+          setReactions(prev => [...prev, ...data.reactions]);
+          // 3秒後にそのグループのリアクションを消去
+          setTimeout(() => {
+            setReactions(prev => prev.filter(r => !data.reactions.find((dr: any) => dr.id === r.id)));
+          }, 3000);
+        }
       } catch (err) {
         console.error("SSE Parse Error", err);
       }
@@ -50,5 +64,5 @@ export function useRippleStream(roomId: string) {
     };
   }, [roomId]);
 
-  return { state, responses, isConnected };
+  return { state, responses, reactions, isConnected };
 }
