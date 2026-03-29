@@ -16,7 +16,7 @@ function App() {
 
             <Routes>
               <Route path="/" element={<ParticipantView />} />
-              <Route path="/host" element={<HostDashboard />} />
+              <Route path="/ripple-control-panel" element={<HostDashboard />} />
             </Routes>
           </div>
         </Router>

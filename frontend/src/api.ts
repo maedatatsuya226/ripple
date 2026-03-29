@@ -5,8 +5,13 @@ export const API_BASE = import.meta.env.DEV
   : ''; // Pages Functionsの場合は空（同一ドメイン）でOK
 
 export const hostLogin = async (password: string) => {
-  // 簡易認証（ハードコード）
-  return password === '1234';
+  const res = await fetch(`${API_BASE}/api/host/login`, {
+    method: 'POST',
+    body: JSON.stringify({ password })
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return data.success;
 };
 
 export const updateHostState = async (roomId: string, state: any) => {

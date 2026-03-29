@@ -30,10 +30,25 @@ export const onRequest = async (context: any) => {
       JSON.stringify({ valid: true, createdAt: Date.now() }),
       { expirationTtl: 604800 } // 7日
     );
-    const guestUrl = `${url.origin}/host?guest=${token}`;
+    // パスを隠しパスに変更
+    const guestUrl = `${url.origin}/ripple-control-panel?guest=${token}`;
     return new Response(JSON.stringify({ url: guestUrl }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
+  }
+
+  // ホスト認証API (環境変数を使用)
+  if (pathname === '/api/host/login' && request.method === 'POST') {
+    try {
+      const { password } = await request.json() as any;
+      const masterPassword = env.HOST_PASSWORD || '1234'; // 未設定時は暫定的に1234
+      const success = (password === masterPassword);
+      return new Response(JSON.stringify({ success }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (e) {
+      return new Response('Bad Request', { status: 400, headers: corsHeaders });
+    }
   }
 
   // ゲストアクセス時: トークン検証 & ルームID払い出し
