@@ -505,11 +505,14 @@ export function HostDashboard() {
 
               {/* QRコード表示 */}
               <div style={panelStyle} className="p-4 mt-2 flex flex-col items-center">
-                <div className="mb-4 text-center">
-                  <span className="text-[10px] font-bold block mb-0.5 opacity-50" style={{ color: theme.text }}>ROOM ID</span>
-                  <span className="text-2xl font-black tracking-widest px-4 py-1 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: theme.accent1, border: `1px solid ${theme.border}` }}>
-                    {roomId}
-                  </span>
+                <div className="mb-4 text-center w-full">
+                  <span className="text-[10px] font-bold block mb-1 opacity-50 uppercase tracking-tighter" style={{ color: theme.text }}>ROOM ID</span>
+                  <div className="mx-auto inline-flex items-center px-3 py-1.5 rounded-xl whitespace-nowrap overflow-hidden max-w-full" 
+                    style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: `1px solid ${theme.border}`, boxShadow: `0 0 10px ${theme.accent1}15` }}>
+                    <span className="text-sm font-mono font-black tracking-tight" style={{ color: theme.accent1 }}>
+                      {roomId}
+                    </span>
+                  </div>
                 </div>
                 <div className="bg-white p-3 rounded-xl shadow-inner mb-3">
                   <QRCodeSVG value={participantUrl} size={160} level="H" />
