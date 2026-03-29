@@ -30,8 +30,8 @@ export const onRequest = async (context: any) => {
       JSON.stringify({ valid: true, createdAt: Date.now() }),
       { expirationTtl: 604800 } // 7日
     );
-    // パスを隠しパスに変更
-    const guestUrl = `${url.origin}/ripple-control-panel?guest=${token}`;
+    // ゲスト用には専用の入り口（/invite）を使用
+    const guestUrl = `${url.origin}/invite?guest=${token}`;
     return new Response(JSON.stringify({ url: guestUrl }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
