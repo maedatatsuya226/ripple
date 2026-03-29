@@ -276,6 +276,9 @@ export function HostDashboard() {
   const [roomId, setRoomId] = useState('');
   const [guestLinkUrl, setGuestLinkUrl] = useState('');
   const [showGuestModal, setShowGuestModal] = useState(false);
+  const [guestDays, setGuestDays] = useState(7);
+  
+  const isGuestAdmin = roomId.startsWith('guest-');
   
   const { state, responses } = useRippleStream(roomId);
   const { theme, setTheme } = useTheme();
@@ -418,12 +421,31 @@ export function HostDashboard() {
               </button>
             ))}
           </div>
-          {/* ゲスト招待ボタン */}
-          <button onClick={async () => {
-            const result = await createGuestToken();
-            if (result?.url) { setGuestLinkUrl(result.url); setShowGuestModal(true); }
-          }} className="px-4 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80"
-            style={{ backgroundColor: `${theme.accent2}25`, border: `1px solid ${theme.accent2}60`, color: theme.accent2 }}>⚡ ゲスト招待リンク</button>
+          {/* ゲスト招待ボタン (本物の管理者のみ表示) */}
+          {!isGuestAdmin && (
+            <div className="flex items-center gap-1.5 p-1 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.2)', border: `1px solid ${theme.border}` }}>
+              <select 
+                value={guestDays} 
+                onChange={(e) => setGuestDays(Number(e.target.value))}
+                className="bg-transparent text-xs font-bold px-2 py-1 outline-none cursor-pointer rounded-lg hover:bg-white/5"
+                style={{ color: theme.textMuted }}
+              >
+                <option value={1} className="bg-slate-800">1日</option>
+                <option value={7} className="bg-slate-800">7日</option>
+                <option value={30} className="bg-slate-800">30日</option>
+              </select>
+              <button 
+                onClick={async () => {
+                  const result = await createGuestToken(guestDays);
+                  if (result?.url) { setGuestLinkUrl(result.url); setShowGuestModal(true); }
+                }} 
+                className="px-4 py-2 rounded-xl font-bold text-sm transition-all hover:opacity-80 whitespace-nowrap"
+                style={{ backgroundColor: `${theme.accent2}25`, border: `1px solid ${theme.accent2}60`, color: theme.accent2 }}
+              >
+                ⚡ ゲスト招待リンク発行
+              </button>
+            </div>
+          )}
           <div className="px-4 py-2 rounded-xl flex items-center gap-2" style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}` }}>
             <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></span>
             <span className="font-bold">{responses.length}<span className="text-sm opacity-60 ml-1">票</span></span>

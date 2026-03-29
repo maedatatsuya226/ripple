@@ -23,12 +23,18 @@ export const onRequest = async (context: any) => {
 
   // ゲストトークン発行 (管理者専用)
   if (pathname === '/api/host/create_guest' && request.method === 'POST') {
+    let days = 7;
+    try {
+      const body = await request.json() as any;
+      if (body.days) days = body.days;
+    } catch (e) {}
+    
     const token = Array.from(crypto.getRandomValues(new Uint8Array(12)))
       .map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
     await env.RIPPLE_KV.put(
       `GUEST_TOKEN:${token}`,
       JSON.stringify({ valid: true, createdAt: Date.now() }),
-      { expirationTtl: 604800 } // 7日
+      { expirationTtl: days * 86400 } // 指定された日数（秒）
     );
     // ゲスト用には専用の入り口（/invite）を使用
     const guestUrl = `${url.origin}/invite?guest=${token}`;

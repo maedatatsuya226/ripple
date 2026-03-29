@@ -48,8 +48,11 @@ export const clearResponses = async (roomId: string) => {
 
 // ---- ゲスト招待リンク機能 ----
 
-export const createGuestToken = async (): Promise<{ url: string } | null> => {
-  const res = await fetch(`${API_BASE}/api/host/create_guest`, { method: 'POST' });
+export const createGuestToken = async (days: number): Promise<{ url: string } | null> => {
+  const res = await fetch(`${API_BASE}/api/host/create_guest`, {
+    method: 'POST',
+    body: JSON.stringify({ days })
+  });
   if (!res.ok) return null;
   return res.json();
 };
