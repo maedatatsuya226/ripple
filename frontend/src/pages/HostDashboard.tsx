@@ -1,0 +1,484 @@
+import { useState } from 'react';
+import { useRippleStream, type AppState } from '../hooks/useRipple';
+import { hostLogin, updateHostState, clearResponses, saveQuestions } from '../api';
+import { useTheme, themes, type ThemeName } from '../contexts/ThemeContext';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
+
+type QuestionType = 'choice' | 'wordcloud' | 'quiz' | 'opentext' | 'slider';
+
+interface Question {
+  id: string;
+  type: QuestionType;
+  text: string;
+  options?: string[];
+  correctAnswer?: string;
+  timerSeconds?: number;
+}
+
+const TYPE_LABELS: Record<QuestionType, string> = {
+  choice: '📊 選択肢',
+  wordcloud: '☁️ ワードクラウド',
+  quiz: '🎯 クイズ',
+  opentext: '📝 自由記述',
+  slider: '🎚️ スライダー',
+};
+
+// ---- 問題作成フォーム ----
+function QuestionEditor({ onSave, onCancel, theme }: { onSave: (q: Question) => void; onCancel: () => void; theme: any }) {
+  const [type, setType] = useState<QuestionType>('choice');
+  const [text, setText] = useState('');
+  const [options, setOptions] = useState(['', '', '', '']);
+  const [correctAnswer, setCorrectAnswer] = useState('');
+  const [timerSeconds, setTimerSeconds] = useState(30);
+
+  const inputStyle = { backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}`, color: theme.text, borderRadius: '12px', padding: '10px 14px', width: '100%', outline: 'none' };
+  const labelStyle = { color: theme.textMuted, fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' };
+
+  const handleSave = () => {
+    if (!text.trim()) return;
+    const q: Question = {
+      id: Date.now().toString(),
+      type, text,
+      options: (type === 'choice' || type === 'quiz') ? options.filter(o => o.trim()) : undefined,
+      correctAnswer: type === 'quiz' ? correctAnswer : undefined,
+      timerSeconds,
+    };
+    onSave(q);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5 p-6 rounded-2xl" style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}` }}>
+      <h3 className="font-black text-xl" style={{ color: theme.text }}>新しい問題を作成</h3>
+
+      {/* タイプ選択 */}
+      <div>
+        <label style={labelStyle}>問題タイプ</label>
+        <div className="grid grid-cols-3 gap-2 mt-1">
+          {(Object.entries(TYPE_LABELS) as [QuestionType, string][]).map(([t, l]) => (
+            <button key={t} onClick={() => setType(t)} className="py-2 px-3 rounded-xl text-sm font-bold transition-all"
+              style={{ backgroundColor: type === t ? theme.accent1 : 'rgba(255,255,255,0.05)', color: type === t ? 'white' : theme.textMuted, border: `1px solid ${type === t ? theme.accent1 : theme.border}` }}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 問題文 */}
+      <div>
+        <label style={labelStyle}>問題文</label>
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="問題を入力..." rows={2}
+          style={{ ...inputStyle, resize: 'vertical' }} />
+      </div>
+
+      {/* 選択肢（choice / quiz） */}
+      {(type === 'choice' || type === 'quiz') && (
+        <div className="flex flex-col gap-2">
+          <label style={labelStyle}>選択肢</label>
+          {options.map((opt, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <span className="text-lg">{['▲', '◆', '●', '■'][i]}</span>
+              <input value={opt} onChange={e => setOptions(options.map((o, j) => j === i ? e.target.value : o))}
+                placeholder={`選択肢 ${i + 1}`} style={inputStyle} />
+              {type === 'quiz' && (
+                <input type="radio" checked={correctAnswer === opt} onChange={() => setCorrectAnswer(opt)}
+                  title="正解" className="w-5 h-5 cursor-pointer flex-none" style={{ accentColor: theme.accent1 }} />
+              )}
+            </div>
+          ))}
+          {type === 'quiz' && <p className="text-xs" style={{ color: theme.textMuted }}>✅ ラジオボタンで正解を選択してください</p>}
+        </div>
+      )}
+
+      {/* タイマー */}
+      <div>
+        <label style={labelStyle}>タイマー（秒）</label>
+        <div className="flex items-center gap-3">
+          <input type="range" min={0} max={120} step={5} value={timerSeconds}
+            onChange={e => setTimerSeconds(Number(e.target.value))} style={{ flex: 1, accentColor: theme.accent1 }} />
+          <span className="font-black text-xl w-12 text-right" style={{ color: theme.accent1 }}>{timerSeconds === 0 ? '∞' : `${timerSeconds}s`}</span>
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <motion.button whileTap={{ scale: 0.97 }} onClick={handleSave} disabled={!text.trim()}
+          className="flex-1 py-3 rounded-2xl font-black disabled:opacity-40"
+          style={{ backgroundColor: theme.accent1, color: 'white' }}>
+          保存 ✅
+        </motion.button>
+        <motion.button whileTap={{ scale: 0.97 }} onClick={onCancel}
+          className="px-6 py-3 rounded-2xl font-bold"
+          style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: theme.textMuted, border: `1px solid ${theme.border}` }}>
+          キャンセル
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ---- ホスト画面の結果表示（問題タイプ別） ----
+function ResultDisplay({ question, responses, theme, showCorrectAnswer = true }: { question: any; responses: any[]; theme: any; showCorrectAnswer?: boolean }) {
+  if (!question) return null;
+  const type: QuestionType = question.type ?? 'choice';
+
+  if (type === 'choice' || type === 'quiz') {
+    const counts: Record<string, number> = {};
+    (question.options ?? []).forEach((o: string) => counts[o] = 0);
+    responses.forEach(r => { if (counts[r.answer] !== undefined) counts[r.answer]++; });
+    const data = Object.entries(counts).map(([name, value]) => ({ name, value }));
+    const neonColors = theme.chartColors;
+    const isQuiz = type === 'quiz' && showCorrectAnswer;
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 30, right: 30, left: 20, bottom: 20 }}>
+          <XAxis dataKey="name" tick={{ fill: theme.text, fontSize: 18, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: theme.textMuted, fontSize: 13 }} allowDecimals={false} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={{ backgroundColor: theme.bg, borderColor: theme.accent1, borderRadius: '12px' }} />
+          <Bar dataKey="value" radius={[16, 16, 0, 0]} animationDuration={1200} label={{ position: 'top', fill: theme.text, fontWeight: 'black', fontSize: 24 }}>
+            {data.map(({ name }, i) => {
+              const isCorrect = isQuiz && name === question.correctAnswer;
+              const fill = isQuiz ? (isCorrect ? '#22c55e' : '#ef444480') : neonColors[i % neonColors.length];
+              return <Cell key={i} fill={fill} style={{ filter: `drop-shadow(0 0 16px ${fill})` }} />;
+            })}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (type === 'slider') {
+    const values = responses.map(r => Number(r.answer)).filter(v => !isNaN(v));
+    const avg = values.length > 0 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : 0;
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-6">
+        <p className="text-2xl font-bold" style={{ color: theme.textMuted }}>平均スコア</p>
+        <div className="text-[120px] font-black leading-none" style={{ color: theme.accent1, textShadow: `0 0 40px ${theme.accent1}60` }}>{avg}<span className="text-5xl">%</span></div>
+        <p className="text-lg" style={{ color: theme.textMuted }}>{responses.length}件の回答</p>
+        <div className="w-full max-w-lg h-4 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+          <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${avg}%`, backgroundColor: theme.accent1, boxShadow: `0 0 20px ${theme.accent1}` }}></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'wordcloud') {
+    const counts: Record<string, number> = {};
+    responses.forEach(r => {
+      if (r.answer?.trim()) {
+        const text = r.answer.trim();
+        counts[text] = (counts[text] || 0) + 1;
+      }
+    });
+    const words = Object.entries(counts).sort((a, b) => b[1] - a[1]); // 頻出順
+    const maxCount = words.length > 0 ? words[0][1] : 1;
+
+    return (
+      <div className="flex flex-col h-full w-full items-center justify-center p-4 overflow-hidden relative">
+        {words.length === 0 && <p className="text-xl font-bold opacity-50">回答を待っています...</p>}
+        <div className="flex flex-wrap justify-center items-center content-center gap-x-4 gap-y-4 w-full h-full">
+          <AnimatePresence>
+            {words.map(([text, count], i) => {
+              const ratio = count / maxCount;
+              // 1rem ~ 6remでサイズを可変
+              const size = 1 + ratio * 5; 
+              const opacity = 0.6 + ratio * 0.4;
+              return (
+                <motion.div 
+                  key={text} 
+                  initial={{ scale: 0, opacity: 0 }} 
+                  animate={{ scale: 1, opacity }} 
+                  layout
+                  transition={{ type: 'spring', damping: 15 }}
+                  className="font-black rounded-xl px-4 py-2 flex items-center justify-center leading-none"
+                  style={{ 
+                    fontSize: `${size}rem`, 
+                    backgroundColor: `${theme.accent1}20`,
+                    color: theme.accent1,
+                    border: `2px solid ${theme.accent1}40`,
+                    boxShadow: `0 0 ${10 * ratio}px ${theme.accent1}40`,
+                    textShadow: `0 0 ${5 * ratio}px ${theme.accent1}80`
+                  }}
+                >
+                  {text}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  }
+
+  // opentext (通常の一覧)
+  const answers = responses.map(r => r.answer).filter(Boolean);
+  return (
+    <div className="flex flex-col h-full p-4 gap-4 overflow-y-auto">
+      <div className="grid grid-cols-2 gap-3">
+        {answers.map((ans, i) => (
+          <motion.div key={i} initial={{ scale: 0.9, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+            className="p-4 rounded-xl font-bold text-lg"
+            style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: `1px solid ${theme.border}` }}>
+            {ans}
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- メインホストダッシュボード ----
+export function HostDashboard() {
+  const { state, responses } = useRippleStream();
+  const { theme, setTheme } = useTheme();
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [showEditor, setShowEditor] = useState(false);
+  const [currentQIndex, setCurrentQIndex] = useState<number | null>(null);
+  const [tab, setTab] = useState<'control' | 'questions'>('control');
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (await hostLogin(password)) setIsAuthenticated(true);
+    else alert('パスワードが違います');
+  };
+
+  const setStatus = async (status: AppState['status'], question?: Question) => {
+    const timerEndAt = question?.timerSeconds ? Date.now() + question.timerSeconds * 1000 : undefined;
+    await updateHostState({ status, currentQuestionId: question?.id, currentQuestion: question, timerEndAt });
+  };
+
+  const handleSaveQuestion = async (q: Question) => {
+    const next = [...questions, q];
+    setQuestions(next);
+    await saveQuestions(next);
+    setShowEditor(false);
+  };
+
+  const handleGoToQuestion = async (idx: number) => {
+    setCurrentQIndex(idx);
+    await clearResponses();
+    await setStatus('question', questions[idx]);
+  };
+
+  const handleNextQuestion = async () => {
+    if (currentQIndex === null) return;
+    const next = currentQIndex + 1;
+    if (next < questions.length) {
+      await handleGoToQuestion(next);
+    } else {
+      await setStatus('end');
+    }
+  };
+
+  const panelStyle = { backgroundColor: theme.surface, border: `1px solid ${theme.border}`, backdropFilter: 'blur(20px)', borderRadius: '1.25rem' };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center w-full relative z-10">
+        <div style={{ ...panelStyle, boxShadow: theme.glowAccent }} className="w-[400px] p-8">
+          <h2 className="text-3xl font-black mb-8 text-center" style={{ color: theme.accent1 }}>Host Login</h2>
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              className="px-4 py-3 rounded-xl focus:outline-none"
+              style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}`, color: theme.text }}
+              placeholder="Enter password (1234)" />
+            <button type="submit" className="py-4 rounded-2xl font-black text-lg" style={{ backgroundColor: theme.accent1, color: 'white' }}>ログイン</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-7xl mx-auto p-4 lg:p-8 flex flex-col min-h-screen relative z-10">
+      {/* ヘッダー */}
+      <header className="flex justify-between items-center mb-6 p-4 rounded-2xl" style={panelStyle}>
+        <h1 className="text-2xl font-black tracking-wider" style={{ color: theme.accent1 }}>🌊 Ripple Host</h1>
+        <div className="flex gap-3 items-center flex-wrap">
+          {/* テーマ切替 */}
+          <div className="flex items-center gap-1 p-1 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.3)', border: `1px solid ${theme.border}` }}>
+            {(Object.values(themes) as typeof themes[ThemeName][]).map(t => (
+              <button key={t.name} onClick={() => setTheme(t.name)} className="px-3 py-2 rounded-lg text-sm font-bold transition-all"
+                style={{ backgroundColor: theme.name === t.name ? t.accent1 : 'transparent', color: theme.name === t.name ? 'white' : theme.textMuted }}>
+                {t.emoji} {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="px-4 py-2 rounded-xl flex items-center gap-2" style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}` }}>
+            <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></span>
+            <span className="font-bold">{responses.length}<span className="text-sm opacity-60 ml-1">票</span></span>
+          </div>
+          <button onClick={() => clearResponses()} className="px-4 py-2 rounded-xl font-bold text-sm"
+            style={{ backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }}>Reset</button>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 flex-1">
+        {/* 左サイドバー */}
+        <div className="lg:col-span-1 flex flex-col gap-4">
+          {/* タブ切替 */}
+          <div className="flex gap-1 p-1 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.3)', border: `1px solid ${theme.border}` }}>
+            {(['control', 'questions'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} className="flex-1 py-2 rounded-lg text-sm font-bold transition-all"
+                style={{ backgroundColor: tab === t ? theme.accent1 : 'transparent', color: tab === t ? 'white' : theme.textMuted }}>
+                {t === 'control' ? '🎮 操作' : '📋 問題'}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'control' && (
+            <div style={panelStyle} className="flex flex-col gap-3 p-4 flex-1">
+              <div className="flex flex-col gap-2">
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStatus('waiting')}
+                  className="w-full py-3 px-4 rounded-2xl font-bold text-sm"
+                  style={{ backgroundColor: state.status === 'waiting' ? theme.accent1 : 'rgba(255,255,255,0.05)', color: state.status === 'waiting' ? 'white' : theme.textMuted, border: `1px solid ${state.status === 'waiting' ? theme.accent1 : theme.border}` }}>
+                  ⏸ 待機画面
+                </motion.button>
+                {currentQIndex !== null && questions[currentQIndex] && (
+                  <>
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStatus('result', questions[currentQIndex])}
+                      className="w-full py-3 px-4 rounded-2xl font-bold text-sm"
+                      style={{ backgroundColor: state.status === 'result' ? theme.accent2 : 'rgba(255,255,255,0.05)', color: state.status === 'result' ? 'white' : theme.textMuted, border: `1px solid ${state.status === 'result' ? theme.accent2 : theme.border}` }}>
+                      📊 結果発表
+                    </motion.button>
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleNextQuestion}
+                      className="w-full py-3 px-4 rounded-2xl font-bold text-sm"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: theme.textMuted, border: `1px solid ${theme.border}` }}>
+                      ⏭ 次の問題へ
+                    </motion.button>
+                  </>
+                )}
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStatus('end')}
+                  className="w-full py-3 px-4 rounded-2xl font-bold text-sm"
+                  style={{ backgroundColor: state.status === 'end' ? '#ef4444' : 'rgba(255,255,255,0.05)', color: state.status === 'end' ? 'white' : theme.textMuted, border: `1px solid ${state.status === 'end' ? '#ef4444' : theme.border}` }}>
+                  🏁 終了
+                </motion.button>
+              </div>
+
+              {/* QRコードプレースホルダー */}
+              <div style={panelStyle} className="p-3 mt-2">
+                <div className="aspect-square bg-white rounded-xl p-3 flex items-center justify-center">
+                  <div className="w-full h-full border-4 border-dashed border-gray-300 flex items-center justify-center rounded-lg">
+                    <p className="font-black text-gray-400 text-xs tracking-widest">QR CODE</p>
+                  </div>
+                </div>
+                <p className="text-center mt-2 font-bold text-xs tracking-widest" style={{ color: theme.textMuted }}>SCAN TO JOIN</p>
+              </div>
+            </div>
+          )}
+
+          {tab === 'questions' && (
+            <div style={panelStyle} className="flex flex-col gap-3 p-4 flex-1 overflow-y-auto max-h-[600px]">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-sm" style={{ color: theme.text }}>問題一覧 ({questions.length})</h3>
+                <button onClick={() => setShowEditor(true)} className="px-3 py-1.5 rounded-xl font-bold text-xs"
+                  style={{ backgroundColor: theme.accent1, color: 'white' }}>＋ 追加</button>
+              </div>
+              {questions.length === 0 && (
+                <p className="text-xs text-center py-8" style={{ color: theme.textMuted }}>まだ問題がありません。「＋ 追加」で作成してください。</p>
+              )}
+              {questions.map((q, i) => (
+                <motion.button key={q.id} whileTap={{ scale: 0.98 }} onClick={() => handleGoToQuestion(i)}
+                  className="w-full text-left p-3 rounded-xl transition-all"
+                  style={{ backgroundColor: currentQIndex === i ? `${theme.accent1}20` : 'rgba(255,255,255,0.04)', border: `1px solid ${currentQIndex === i ? theme.accent1 : theme.border}` }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs px-2 py-0.5 rounded-full font-bold"
+                      style={{ backgroundColor: `${theme.accent1}20`, color: theme.accent1 }}>
+                      {TYPE_LABELS[q.type]}
+                    </span>
+                    <span className="text-xs ml-auto" style={{ color: theme.textMuted }}>⏱ {q.timerSeconds === 0 ? '∞' : `${q.timerSeconds}s`}</span>
+                  </div>
+                  <p className="text-sm font-bold truncate" style={{ color: theme.text }}>{i + 1}. {q.text}</p>
+                </motion.button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* メインプレビューエリア */}
+        <div className="lg:col-span-3 flex flex-col gap-4">
+          {/* 問題エディタ */}
+          <AnimatePresence>
+            {showEditor && (
+              <QuestionEditor onSave={handleSaveQuestion} onCancel={() => setShowEditor(false)} theme={theme} />
+            )}
+          </AnimatePresence>
+
+          {/* プレビューカード */}
+          <div style={{ ...panelStyle, boxShadow: theme.glowAccent, flex: 1 }} className="flex flex-col p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-2xl font-bold" style={{ color: theme.text }}>
+                {state.status === 'result' ? '📊 結果' : state.status === 'question' ? '📡 ライブ' : '📺 プレビュー'}
+                {currentQIndex !== null && questions[currentQIndex] && (
+                  <span className="text-sm ml-3 font-normal" style={{ color: theme.textMuted }}>
+                    ({currentQIndex + 1}/{questions.length}) {TYPE_LABELS[questions[currentQIndex].type]}
+                  </span>
+                )}
+              </h2>
+              <div className="flex gap-2">
+                {(state.status === 'question' || state.status === 'result') && (
+                  <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm font-bold"
+                    style={{ backgroundColor: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ade80' }}>
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                    {responses.length} 票
+                  </div>
+                )}
+                <div className="px-3 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: `1px solid ${theme.border}`, color: theme.textMuted }}>
+                  {state.status}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 rounded-2xl flex flex-col overflow-hidden" style={{ backgroundColor: 'rgba(0,0,0,0.3)', border: `1px solid ${theme.border}40` }}>
+              {state.status === 'waiting' && (
+                <div className="flex-1 flex flex-col items-center justify-center">
+                  <h1 className="text-7xl font-black tracking-tighter mb-4" style={{ color: theme.accent1, textShadow: `0 0 30px ${theme.accent1}60` }}>Ripple</h1>
+                  <p className="text-2xl font-bold" style={{ color: theme.text }}>ただいま準備中...🎉</p>
+                </div>
+              )}
+
+              {state.status === 'question' && (
+                <motion.div key="live" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col px-8 py-6 gap-4 overflow-hidden">
+                  <h3 className="text-3xl font-black leading-tight text-center" style={{ color: theme.text }}>{state.currentQuestion?.text}</h3>
+                  <div className="flex-1 min-h-0">
+                    <ResultDisplay question={state.currentQuestion} responses={responses} theme={theme} showCorrectAnswer={false} />
+                  </div>
+                  {(!state.currentQuestion?.type || state.currentQuestion?.type === 'choice' || state.currentQuestion?.type === 'quiz') && (
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                      {state.currentQuestion?.options?.map((opt: string, i: number) => {
+                        const c = theme.optColors[i % theme.optColors.length];
+                        return (
+                          <div key={i} className="rounded-2xl py-2 px-3 text-center font-black text-base flex items-center gap-1 justify-center shadow-lg" style={{ backgroundColor: c.bg, color: c.text }}>
+                            <span className="drop-shadow-md">{theme.optShapes[i % 4]}</span>
+                            <span className="truncate drop-shadow-md">{opt}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {state.status === 'result' && (
+                <motion.div key="result" initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex-1 flex flex-col px-8 py-6 gap-4 overflow-hidden">
+                  <h3 className="text-3xl font-black leading-tight text-center" style={{ color: theme.text }}>{state.currentQuestion?.text}</h3>
+                  <div className="flex-1 min-h-0">
+                    <ResultDisplay question={state.currentQuestion} responses={responses} theme={theme} showCorrectAnswer={true} />
+                  </div>
+                </motion.div>
+              )}
+
+              {state.status === 'end' && (
+                <div className="flex-1 flex flex-col items-center justify-center text-center">
+                  <h3 className="text-6xl font-black mb-4 tracking-widest" style={{ color: theme.accent1, textShadow: `0 0 30px ${theme.accent1}60` }}>THANK YOU</h3>
+                  <p className="text-2xl font-bold" style={{ color: theme.text }}>ご参加ありがとうございました</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
