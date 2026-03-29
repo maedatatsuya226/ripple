@@ -17,13 +17,15 @@ export interface AppResponse {
   timestamp: number;
 }
 
-export function useRippleStream() {
+export function useRippleStream(roomId: string) {
   const [state, setState] = useState<AppState>({ status: 'waiting' });
   const [responses, setResponses] = useState<AppResponse[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const sse = new EventSource(`${API_BASE}/api/stream`);
+    if (!roomId) return;
+    
+    const sse = new EventSource(`${API_BASE}/api/stream?room=${roomId}`);
     
     sse.onopen = () => setIsConnected(true);
     
@@ -46,7 +48,7 @@ export function useRippleStream() {
       sse.close();
       setIsConnected(false);
     };
-  }, []);
+  }, [roomId]);
 
   return { state, responses, isConnected };
 }

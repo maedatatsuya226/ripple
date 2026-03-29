@@ -125,7 +125,13 @@ function SliderInput({ onVote, theme }: any) {
 
 // ---- メインコンポーネント ----
 export function ParticipantView() {
-  const { state, isConnected } = useRippleStream();
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialRoomId = urlParams.get('room') || '';
+
+  const [roomIdInput, setRoomIdInput] = useState('');
+  const [roomId, setRoomId] = useState(initialRoomId);
+
+  const { state, isConnected } = useRippleStream(roomId);
   const { theme } = useTheme();
   const [voted, setVoted] = useState(false);
 
@@ -134,8 +140,9 @@ export function ParticipantView() {
   }, [state.currentQuestionId]);
 
   const handleVote = async (answer: any) => {
+    if (!roomId) return;
     setVoted(true);
-    await submitVote(sessionId, answer);
+    await submitVote(roomId, sessionId, answer);
   };
 
   // カウントダウン
@@ -160,6 +167,31 @@ export function ParticipantView() {
 
   const q = state.currentQuestion;
   const qType: string = q?.type ?? 'choice';
+
+  if (!roomId) {
+    return (
+      <div className="w-full max-w-md mx-auto p-4 flex flex-col items-center justify-center min-h-[90vh] relative z-10">
+        <div style={panelStyle} className="p-8 w-full">
+          <h2 className="text-3xl font-black mb-6 text-center tracking-wider text-transparent bg-clip-text" style={{ backgroundImage: `linear-gradient(135deg, ${theme.accent1}, ${theme.accent2})` }}>Join Ripple</h2>
+          <p className="text-sm font-bold mb-4 text-center" style={{ color: theme.textMuted }}>ホストから案内された<br/>ルームIDを入力してください</p>
+          <div className="flex flex-col gap-4">
+            <input type="text" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl focus:outline-none font-black text-center text-2xl tracking-widest"
+              style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `2px solid ${theme.accent1}40`, color: theme.text }}
+              placeholder="1234" />
+            <motion.button whileTap={{ scale: 0.95 }} onClick={() => {
+              if (roomIdInput.trim()) {
+                setRoomId(roomIdInput.trim());
+                const newUrl = new URL(window.location.href);
+                newUrl.searchParams.set('room', roomIdInput.trim());
+                window.history.replaceState({}, '', newUrl);
+              }
+            }} disabled={!roomIdInput.trim()} className="py-4 rounded-2xl font-black text-lg mt-2 disabled:opacity-50 transition-opacity whitespace-nowrap" style={{ backgroundColor: theme.accent1, color: 'white', boxShadow: `0 0 20px ${theme.accent1}50` }}>部屋に入る 🚪</motion.button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md mx-auto p-4 flex flex-col items-center justify-center min-h-[90vh] relative z-10">

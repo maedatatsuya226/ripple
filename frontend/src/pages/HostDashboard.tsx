@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useRippleStream, type AppState } from '../hooks/useRipple';
-import { hostLogin, updateHostState, clearResponses, saveQuestions } from '../api';
+import { hostLogin, updateHostState, clearResponses, saveQuestions, getQuestions } from '../api';
 import { useTheme, themes, type ThemeName } from '../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
@@ -269,7 +269,13 @@ function ResultDisplay({ question, responses, theme, showCorrectAnswer = true }:
 
 // ---- メインホストダッシュボード ----
 export function HostDashboard() {
-  const { state, responses } = useRippleStream();
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialRoomId = urlParams.get('room') || Math.floor(1000 + Math.random() * 9000).toString();
+
+  const [roomIdInput, setRoomIdInput] = useState(initialRoomId);
+  const [roomId, setRoomId] = useState('');
+  
+  const { state, responses } = useRippleStream(roomId);
   const { theme, setTheme } = useTheme();
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -280,25 +286,38 @@ export function HostDashboard() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (await hostLogin(password)) setIsAuthenticated(true);
-    else alert('パスワードが違います');
+    if (!roomIdInput.trim()) return alert('ルーム名を入力してください');
+    
+    if (await hostLogin(password)) {
+      setRoomId(roomIdInput);
+      setIsAuthenticated(true);
+      
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('room', roomIdInput);
+      window.history.replaceState({}, '', newUrl);
+      
+      const qs = await getQuestions(roomIdInput);
+      setQuestions(Array.isArray(qs) ? qs : []);
+    } else {
+      alert('パスワードが違います');
+    }
   };
 
   const setStatus = async (status: AppState['status'], question?: Question) => {
     const timerEndAt = question?.timerSeconds ? Date.now() + question.timerSeconds * 1000 : undefined;
-    await updateHostState({ status, currentQuestionId: question?.id, currentQuestion: question, timerEndAt });
+    await updateHostState(roomId, { status, currentQuestionId: question?.id, currentQuestion: question, timerEndAt });
   };
 
   const handleSaveQuestion = async (q: Question) => {
     const next = [...questions, q];
     setQuestions(next);
-    await saveQuestions(next);
+    await saveQuestions(roomId, next);
     setShowEditor(false);
   };
 
   const handleGoToQuestion = async (idx: number) => {
     setCurrentQIndex(idx);
-    await clearResponses();
+    await clearResponses(roomId);
     await setStatus('question', questions[idx]);
   };
 
@@ -314,7 +333,7 @@ export function HostDashboard() {
 
   const panelStyle = { backgroundColor: theme.surface, border: `1px solid ${theme.border}`, backdropFilter: 'blur(20px)', borderRadius: '1.25rem' };
 
-  const participantUrl = window.location.origin;
+  const participantUrl = `${window.location.origin}/?room=${roomId}`;
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -330,11 +349,20 @@ export function HostDashboard() {
         <div style={{ ...panelStyle, boxShadow: theme.glowAccent }} className="w-[400px] p-8">
           <h2 className="text-3xl font-black mb-8 text-center" style={{ color: theme.accent1 }}>Host Login</h2>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              className="px-4 py-3 rounded-xl focus:outline-none"
-              style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}`, color: theme.text }}
-              placeholder="Enter password (1234)" />
-            <button type="submit" className="py-4 rounded-2xl font-black text-lg" style={{ backgroundColor: theme.accent1, color: 'white' }}>ログイン</button>
+            <div>
+              <label className="text-xs font-bold mb-1 block" style={{ color: theme.textMuted }}>ルームID (Room Code)</label>
+              <input type="text" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl focus:outline-none font-black"
+                style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}`, color: theme.text }} />
+            </div>
+            <div>
+              <label className="text-xs font-bold mb-1 block" style={{ color: theme.textMuted }}>パスワード (Password)</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl focus:outline-none"
+                style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: `1px solid ${theme.border}`, color: theme.text }}
+                placeholder="Enter password (1234)" />
+            </div>
+            <button type="submit" className="py-4 mt-2 rounded-2xl font-black text-lg" style={{ backgroundColor: theme.accent1, color: 'white' }}>ログイン</button>
           </form>
         </div>
       </div>
@@ -360,7 +388,7 @@ export function HostDashboard() {
             <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: '#22c55e', boxShadow: '0 0 8px #22c55e' }}></span>
             <span className="font-bold">{responses.length}<span className="text-sm opacity-60 ml-1">票</span></span>
           </div>
-          <button onClick={() => clearResponses()} className="px-4 py-2 rounded-xl font-bold text-sm"
+          <button onClick={() => clearResponses(roomId)} className="px-4 py-2 rounded-xl font-bold text-sm"
             style={{ backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }}>Reset</button>
         </div>
       </header>

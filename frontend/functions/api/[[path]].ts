@@ -16,9 +16,18 @@ export const onRequest = async (context: any) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // APIパスの正規化 (/api/stream などのパスを処理)
-  // Pages Functionsは /functions/api/... に配置されるが、ここでは [[path]].ts なので相対的
+  // APIパスの正規化
   const pathname = url.pathname;
+  const roomId = url.searchParams.get('room');
+
+  if (pathname.startsWith('/api/') && !roomId) {
+    if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+    return new Response('Missing room parameter', { status: 400, headers: corsHeaders });
+  }
+
+  const STATE_KEY = `ROOM_${roomId}_STATE`;
+  const RESP_KEY = `ROOM_${roomId}_RESPONSES`;
+  const Q_KEY = `ROOM_${roomId}_QUESTIONS`;
 
   // SSE (Server-Sent Events)
   if (pathname === '/api/stream' && request.method === 'GET') {
@@ -37,8 +46,8 @@ export const onRequest = async (context: any) => {
       try {
         let lastStateString = '';
         for (let i = 0; i < 1200; i++) {
-          const currentStateRaw = await env.RIPPLE_KV.get('CURRENT_STATE') || '{"status": "waiting"}';
-          const responsesRaw = await env.RIPPLE_KV.get('RESPONSES') || '[]';
+          const currentStateRaw = await env.RIPPLE_KV.get(STATE_KEY) || '{"status": "waiting"}';
+          const responsesRaw = await env.RIPPLE_KV.get(RESP_KEY) || '[]';
           const payload = JSON.stringify({ state: JSON.parse(currentStateRaw), responses: JSON.parse(responsesRaw) });
           
           if (payload !== lastStateString || i % 10 === 0) {
@@ -60,20 +69,20 @@ export const onRequest = async (context: any) => {
   // 各種APIエンドポイント
   if (pathname === '/api/host/state' && request.method === 'POST') {
     const body = await request.text();
-    await env.RIPPLE_KV.put('CURRENT_STATE', body, { expirationTtl: 86400 });
+    await env.RIPPLE_KV.put(STATE_KEY, body, { expirationTtl: 86400 });
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   }
 
   if (pathname === '/api/vote' && request.method === 'POST') {
     try {
       const { sessionId, answer } = await request.json() as any;
-      const responsesRaw = await env.RIPPLE_KV.get('RESPONSES') || '[]';
+      const responsesRaw = await env.RIPPLE_KV.get(RESP_KEY) || '[]';
       let responses: any[] = JSON.parse(responsesRaw);
-      const existingIndex = responses.findIndex(r => r.sessionId === sessionId);
+      const existingIndex = responses.findIndex((r: any) => r.sessionId === sessionId);
       if (existingIndex >= 0) responses[existingIndex].answer = answer;
       else responses.push({ sessionId, answer, timestamp: Date.now() });
       
-      await env.RIPPLE_KV.put('RESPONSES', JSON.stringify(responses), { expirationTtl: 7200 });
+      await env.RIPPLE_KV.put(RESP_KEY, JSON.stringify(responses), { expirationTtl: 7200 });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     } catch (e) {
       return new Response('Bad Request', { status: 400, headers: corsHeaders });
@@ -81,18 +90,18 @@ export const onRequest = async (context: any) => {
   }
 
   if (pathname === '/api/host/clear_responses' && request.method === 'POST') {
-    await env.RIPPLE_KV.put('RESPONSES', '[]');
+    await env.RIPPLE_KV.put(RESP_KEY, '[]');
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   }
 
   if (pathname === '/api/host/questions' && request.method === 'POST') {
     const body = await request.text();
-    await env.RIPPLE_KV.put('QUESTIONS', body);
+    await env.RIPPLE_KV.put(Q_KEY, body);
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   }
 
   if (pathname === '/api/questions' && request.method === 'GET') {
-    const questionsRaw = await env.RIPPLE_KV.get('QUESTIONS') || '[]';
+    const questionsRaw = await env.RIPPLE_KV.get(Q_KEY) || '[]';
     return new Response(questionsRaw, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
