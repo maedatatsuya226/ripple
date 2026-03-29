@@ -3,6 +3,7 @@ import { useRippleStream } from '../hooks/useRipple';
 import { submitVote } from '../api';
 import { useTheme } from '../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle } from 'lucide-react';
 
 const sessionId = Math.random().toString(36).substring(2, 10);
 
@@ -28,8 +29,18 @@ function ChoiceInput({ question, onVote, theme }: any) {
 }
 
 // 2. ワードクラウド・自由記述（テキスト入力）
-function TextInput({ placeholder, onVote, theme }: any) {
+function TextInput({ placeholder, onVote, theme, isWordCloud }: any) {
   const [text, setText] = useState('');
+  const [sentiment, setSentiment] = useState<'positive' | 'neutral' | 'negative'>('neutral');
+
+  const handleVote = () => {
+    if (isWordCloud) {
+      onVote({ text, sentiment });
+    } else {
+      onVote(text);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <textarea
@@ -40,8 +51,20 @@ function TextInput({ placeholder, onVote, theme }: any) {
         onChange={e => setText(e.target.value)}
         maxLength={80}
       />
-      <span className="text-right text-xs" style={{ color: theme.textMuted }}>{text.length}/80</span>
-      <motion.button whileTap={{ scale: 0.95 }} onClick={() => onVote(text)} disabled={!text.trim()}
+      <span className="text-right text-xs mt-[-10px]" style={{ color: theme.textMuted }}>{text.length}/80</span>
+      
+      {isWordCloud && (
+        <div className="flex flex-col gap-2 mb-2">
+          <p className="text-sm font-bold opacity-80" style={{ color: theme.text }}>この言葉のイメージは？</p>
+          <div className="flex gap-2">
+            <button onClick={() => setSentiment('positive')} className={`flex-1 py-1 px-1 rounded-xl text-xs font-bold border-2 transition-all ${sentiment === 'positive' ? 'opacity-100 scale-105 shadow-lg' : 'opacity-40'}`} style={{ borderColor: '#3b82f6', backgroundColor: sentiment === 'positive' ? '#3b82f6' : 'transparent', color: sentiment === 'positive' ? 'white' : '#3b82f6' }}>👍 ポジ<br/>(青系)</button>
+            <button onClick={() => setSentiment('neutral')} className={`flex-1 py-1 px-1 rounded-xl text-xs font-bold border-2 transition-all ${sentiment === 'neutral' ? 'opacity-100 scale-105 shadow-lg' : 'opacity-40'}`} style={{ borderColor: '#9ca3af', backgroundColor: sentiment === 'neutral' ? '#9ca3af' : 'transparent', color: sentiment === 'neutral' ? theme.bg : '#9ca3af' }}>😐 中立<br/>(白/灰)</button>
+            <button onClick={() => setSentiment('negative')} className={`flex-1 py-1 px-1 rounded-xl text-xs font-bold border-2 transition-all ${sentiment === 'negative' ? 'opacity-100 scale-105 shadow-lg' : 'opacity-40'}`} style={{ borderColor: '#ef4444', backgroundColor: sentiment === 'negative' ? '#ef4444' : 'transparent', color: sentiment === 'negative' ? 'white' : '#ef4444' }}>👎 ネガ<br/>(赤系)</button>
+          </div>
+        </div>
+      )}
+
+      <motion.button whileTap={{ scale: 0.95 }} onClick={handleVote} disabled={!text.trim()}
         className="py-4 rounded-2xl font-black text-xl disabled:opacity-40"
         style={{ backgroundColor: theme.accent1, color: 'white', boxShadow: `0 0 20px ${theme.accent1}50` }}>
         送信 ✈️
@@ -185,7 +208,7 @@ export function ParticipantView() {
               {!voted ? (
                 <>
                   {(qType === 'choice') && <ChoiceInput question={q} onVote={handleVote} theme={theme} />}
-                  {(qType === 'wordcloud') && <TextInput placeholder="ワードを入力してください..." onVote={handleVote} theme={theme} />}
+                  {(qType === 'wordcloud') && <TextInput placeholder="ワードを入力してください..." onVote={handleVote} theme={theme} isWordCloud={true} />}
                   {(qType === 'quiz') && <QuizInput question={q} onVote={handleVote} theme={theme} />}
                   {(qType === 'opentext') && <TextInput placeholder="自由に回答してください..." onVote={handleVote} theme={theme} />}
                   {(qType === 'slider') && <SliderInput onVote={handleVote} theme={theme} />}
@@ -194,7 +217,9 @@ export function ParticipantView() {
                 <div className="text-center font-bold py-10 flex flex-col items-center">
                   {qType !== 'quiz' && (
                     <>
-                      <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring' }} className="text-7xl mb-4">✨</motion.div>
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }} className="mb-4">
+                        <CheckCircle size={80} color={theme.accent2} />
+                      </motion.div>
                       <p className="text-2xl" style={{ color: theme.accent2 }}>回答を受け付けました！</p>
                       <p className="text-sm mt-2 font-normal" style={{ color: theme.textMuted }}>画面が切り替わるまでお待ちください</p>
                     </>
@@ -219,7 +244,6 @@ export function ParticipantView() {
             <div style={panelStyle} className="text-center py-12 px-8">
               <h2 className="text-4xl font-black mb-6" style={{ color: theme.accent1 }}>Thank You!</h2>
               <p className="text-xl font-bold mb-2">ご参加ありがとうございました！</p>
-              <p style={{ color: theme.textMuted }}>アウトブレイクルームへ移動してください。</p>
             </div>
           </motion.div>
         )}

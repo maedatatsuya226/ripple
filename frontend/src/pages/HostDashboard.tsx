@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useRippleStream, type AppState } from '../hooks/useRipple';
 import { hostLogin, updateHostState, clearResponses, saveQuestions } from '../api';
 import { useTheme, themes, type ThemeName } from '../contexts/ThemeContext';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -126,24 +125,35 @@ function ResultDisplay({ question, responses, theme, showCorrectAnswer = true }:
     const counts: Record<string, number> = {};
     (question.options ?? []).forEach((o: string) => counts[o] = 0);
     responses.forEach(r => { if (counts[r.answer] !== undefined) counts[r.answer]++; });
-    const data = Object.entries(counts).map(([name, value]) => ({ name, value }));
+    const total = responses.length;
+    const data = Object.entries(counts).map(([name, value]) => ({ name, value, pct: total > 0 ? Math.round((value / total) * 100) : 0 }));
     const neonColors = theme.chartColors;
     const isQuiz = type === 'quiz' && showCorrectAnswer;
+    
     return (
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 30, right: 30, left: 20, bottom: 20 }}>
-          <XAxis dataKey="name" tick={{ fill: theme.text, fontSize: 18, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: theme.textMuted, fontSize: 13 }} allowDecimals={false} axisLine={false} tickLine={false} />
-          <Tooltip contentStyle={{ backgroundColor: theme.bg, borderColor: theme.accent1, borderRadius: '12px' }} />
-          <Bar dataKey="value" radius={[16, 16, 0, 0]} animationDuration={1200} label={{ position: 'top', fill: theme.text, fontWeight: 'black', fontSize: 24 }}>
-            {data.map(({ name }, i) => {
-              const isCorrect = isQuiz && name === question.correctAnswer;
-              const fill = isQuiz ? (isCorrect ? '#22c55e' : '#ef444480') : neonColors[i % neonColors.length];
-              return <Cell key={i} fill={fill} style={{ filter: `drop-shadow(0 0 16px ${fill})` }} />;
-            })}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="flex flex-col gap-5 w-full h-full justify-center overflow-y-auto px-4 py-2">
+        {data.map((item, i) => {
+          const isCorrect = isQuiz && item.name === question.correctAnswer;
+          const fill = isQuiz ? (isCorrect ? '#22c55e' : '#ef444480') : neonColors[i % neonColors.length];
+          return (
+            <div key={i} className="flex flex-col gap-2 w-full">
+              <div className="flex justify-between items-end">
+                <span className="text-xl font-bold" style={{ color: theme.text }}>{item.name} {isCorrect && '✅'}</span>
+                <span className="text-xl font-black" style={{ color: theme.textMuted }}>{item.pct}%</span>
+              </div>
+              <div className="w-full h-6 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${item.pct}%` }}
+                  transition={{ duration: 1, type: 'spring' }}
+                  className="h-full rounded-full"
+                  style={{ backgroundColor: fill, boxShadow: `0 0 16px ${fill}60` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     );
   }
 
@@ -163,41 +173,71 @@ function ResultDisplay({ question, responses, theme, showCorrectAnswer = true }:
   }
 
   if (type === 'wordcloud') {
-    const counts: Record<string, number> = {};
+    const wordSentiments: Record<string, { count: number, sentiment: string }> = {};
     responses.forEach(r => {
-      if (r.answer?.trim()) {
-        const text = r.answer.trim();
-        counts[text] = (counts[text] || 0) + 1;
+      let text = '';
+      let sentiment = 'neutral';
+      if (typeof r.answer === 'object' && r.answer !== null) {
+        text = r.answer.text?.trim() || '';
+        sentiment = r.answer.sentiment || 'neutral';
+      } else if (typeof r.answer === 'string') {
+        text = r.answer.trim();
+      }
+      
+      if (text) {
+        if (!wordSentiments[text]) {
+          wordSentiments[text] = { count: 0, sentiment };
+        }
+        wordSentiments[text].count++;
+        // 必要に応じて上書き: wordSentiments[text].sentiment = sentiment;
       }
     });
-    const words = Object.entries(counts).sort((a, b) => b[1] - a[1]); // 頻出順
-    const maxCount = words.length > 0 ? words[0][1] : 1;
+    const words = Object.entries(wordSentiments).sort((a, b) => b[1].count - a[1].count); // 頻出順
+    const maxCount = words.length > 0 ? words[0][1].count : 1;
 
     return (
       <div className="flex flex-col h-full w-full items-center justify-center p-4 overflow-hidden relative">
         {words.length === 0 && <p className="text-xl font-bold opacity-50">回答を待っています...</p>}
         <div className="flex flex-wrap justify-center items-center content-center gap-x-4 gap-y-4 w-full h-full">
           <AnimatePresence>
-            {words.map(([text, count]) => {
+            {words.map(([text, { count, sentiment }]) => {
               const ratio = count / maxCount;
               // 1rem ~ 6remでサイズを可変
               const size = 1 + ratio * 5; 
-              const opacity = 0.6 + ratio * 0.4;
+              
+              let color = theme.accent1;
+              let bgColor = `${theme.accent1}20`;
+              let borderColor = `${theme.accent1}40`;
+              
+              if (sentiment === 'positive') {
+                color = '#3b82f6';
+                bgColor = 'rgba(59, 130, 246, 0.2)';
+                borderColor = 'rgba(59, 130, 246, 0.4)';
+              } else if (sentiment === 'negative') {
+                color = '#ef4444';
+                bgColor = 'rgba(239, 68, 68, 0.2)';
+                borderColor = 'rgba(239, 68, 68, 0.4)';
+              } else if (sentiment === 'neutral') {
+                color = theme.text;
+                bgColor = 'rgba(255, 255, 255, 0.1)';
+                borderColor = 'rgba(255, 255, 255, 0.2)';
+              }
+
               return (
                 <motion.div 
                   key={text} 
                   initial={{ scale: 0, opacity: 0 }} 
-                  animate={{ scale: 1, opacity }} 
+                  animate={{ scale: 1, opacity: 1 }} 
                   layout
                   transition={{ type: 'spring', damping: 15 }}
                   className="font-black rounded-xl px-4 py-2 flex items-center justify-center leading-none"
                   style={{ 
                     fontSize: `${size}rem`, 
-                    backgroundColor: `${theme.accent1}20`,
-                    color: theme.accent1,
-                    border: `2px solid ${theme.accent1}40`,
-                    boxShadow: `0 0 ${10 * ratio}px ${theme.accent1}40`,
-                    textShadow: `0 0 ${5 * ratio}px ${theme.accent1}80`
+                    backgroundColor: bgColor,
+                    color: color,
+                    border: `2px solid ${borderColor}`,
+                    boxShadow: `0 0 ${10 * ratio}px ${borderColor}`,
+                    textShadow: `0 0 ${5 * ratio}px ${color}80`
                   }}
                 >
                   {text}
