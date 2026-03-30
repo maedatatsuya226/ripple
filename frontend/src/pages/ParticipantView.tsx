@@ -218,6 +218,33 @@ export function ParticipantView() {
           </motion.div>
         )}
 
+        {state.status === 'break' && (
+          <motion.div key="break" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="text-center w-full">
+            <div style={panelStyle} className="py-16 px-8 text-center flex flex-col items-center gap-6">
+              <motion.div
+                animate={{ rotate: [0, -10, 10, -10, 0] }}
+                transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
+                className="text-8xl"
+              >
+                ☕️
+              </motion.div>
+              <div>
+                <p className="text-3xl font-black mb-2" style={{ color: theme.accent1 }}>休憩中</p>
+                <p className="text-sm font-medium" style={{ color: theme.textMuted }}>しばらくお待ちください</p>
+              </div>
+              <div className="flex gap-1 mt-2">
+                {[0, 1, 2].map(i => (
+                  <motion.div key={i} className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: theme.accent1 }}
+                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.3 }}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {state.status === 'question' && (
           <motion.div key={`q-${state.currentQuestionId}`} initial={{ x: '100%', opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: '-100%', opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="w-full">
             <div style={panelStyle} className="p-5 flex flex-col gap-5">

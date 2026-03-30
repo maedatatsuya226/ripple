@@ -109,8 +109,9 @@ export const onRequest = async (context: any) => {
              await env.RIPPLE_KV.delete(REACT_KEY);
           }
           
+          const stateObj = JSON.parse(currentStateRaw);
           const payload = JSON.stringify({ 
-            state: JSON.parse(currentStateRaw), 
+            state: stateObj, 
             responses: JSON.parse(responsesRaw),
             reactions: JSON.parse(reactionsRaw)
           });
@@ -119,7 +120,10 @@ export const onRequest = async (context: any) => {
             await writer.write(encoder.encode(`data: ${payload}\n\n`));
             lastStateString = payload;
           }
-          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // 休憩中はポーリング間隔を15秒に延長してKV読み取りを節約
+          const isBreak = stateObj.status === 'break';
+          await new Promise(resolve => setTimeout(resolve, isBreak ? 15000 : 1000));
         }
       } catch (e) {
         console.error('SSE Error:', e);

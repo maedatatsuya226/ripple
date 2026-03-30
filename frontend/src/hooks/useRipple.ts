@@ -5,7 +5,7 @@ import { type ThemeName } from '../contexts/ThemeContext';
 export type QuestionType = 'choice' | 'wordcloud' | 'quiz' | 'opentext' | 'slider';
 
 export interface AppState {
-  status: 'waiting' | 'question' | 'result' | 'end';
+  status: 'waiting' | 'question' | 'result' | 'end' | 'break';
   currentQuestionId?: string;
   currentQuestion?: any;
   countdown?: number;

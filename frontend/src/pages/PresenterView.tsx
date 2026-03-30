@@ -149,6 +149,33 @@ export function PresenterView() {
           </motion.div>
         )}
 
+        {state.status === 'break' && (
+          <motion.div key="break" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+            className="text-center flex flex-col items-center gap-12">
+            <motion.div
+              animate={{ rotate: [0, -8, 8, -8, 0] }}
+              transition={{ repeat: Infinity, duration: 4, ease: 'easeInOut' }}
+              className="text-[12rem] leading-none filter drop-shadow-2xl"
+            >
+              ☕️
+            </motion.div>
+            <div className="flex flex-col items-center gap-4">
+              <h2 className="text-9xl font-black tracking-tighter" style={{ color: theme.accent1 }}>休憩中</h2>
+              <p className="text-3xl font-bold opacity-50 tracking-widest">BREAK TIME</p>
+            </div>
+            {/* 休憩中もQRコードを右下に維持 */}
+            <div className="absolute bottom-10 right-10 flex items-center gap-6 bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-white/20 shadow-xl">
+              <div className="bg-white p-2 rounded-xl">
+                <QRCodeSVG value={participantUrl} size={100} level="H" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold opacity-60 uppercase">Join Now</span>
+                <span className="text-2xl font-mono font-black">{roomId}</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {state.status === 'question' || state.status === 'result' ? (
           <motion.div key="active" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full flex flex-col items-center">
             {/* 上部: 質問文 */}

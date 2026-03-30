@@ -521,6 +521,19 @@ export function HostDashboard() {
           <button onClick={() => clearResponses(roomId)} className="px-4 py-2 rounded-xl font-bold text-sm"
             style={{ backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }}>Reset</button>
           
+          {/* 休憩モードボタン */}
+          <button
+            onClick={() => setStatus(state.status === 'break' ? 'waiting' : 'break')}
+            className="px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all hover:brightness-110"
+            style={{
+              backgroundColor: state.status === 'break' ? '#22c55e22' : 'rgba(251,191,36,0.15)',
+              border: `1px solid ${state.status === 'break' ? '#22c55e80' : 'rgba(251,191,36,0.5)'}`,
+              color: state.status === 'break' ? '#22c55e' : '#fbbf24',
+            }}
+          >
+            {state.status === 'break' ? '▶️ 再開' : '☕️ 休憩'}
+          </button>
+
           <a href={`/presenter?room=${roomId}`} target="_blank" rel="noopener noreferrer" 
              className="px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all hover:brightness-110"
              style={{ backgroundColor: theme.accent1, color: 'white', boxShadow: `0 4px 12px ${theme.accent1}40` }}>
