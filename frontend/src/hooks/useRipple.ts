@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { API_BASE } from '../api';
+import { type ThemeName } from '../contexts/ThemeContext';
 
 export type QuestionType = 'choice' | 'wordcloud' | 'quiz' | 'opentext' | 'slider';
 
@@ -9,6 +10,7 @@ export interface AppState {
   currentQuestion?: any;
   countdown?: number;
   timerEndAt?: number; // Unix ms
+  theme?: ThemeName;
 }
 
 export interface AppResponse {

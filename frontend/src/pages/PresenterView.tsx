@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useRippleStream } from '../hooks/useRipple';
 import { useTheme } from '../contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -106,7 +107,14 @@ export function PresenterView() {
   const urlParams = new URLSearchParams(window.location.search);
   const roomId = urlParams.get('room') || '';
   const { state, responses, reactions } = useRippleStream(roomId);
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
+
+  // テーマの同期
+  useEffect(() => {
+    if (state.theme && state.theme !== theme.name) {
+      setTheme(state.theme);
+    }
+  }, [state.theme, theme.name, setTheme]);
 
   const participantUrl = `${window.location.origin}/?room=${roomId}`;
 

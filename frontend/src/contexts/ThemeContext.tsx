@@ -79,7 +79,7 @@ export const themes: Record<ThemeName, Theme> = {
     name: 'hospital',
     label: '病院',
     emoji: '🚑',
-    bg: '#fafaf9',
+    bg: '#ffffff',
     surface: '#ffffff',
     border: '#e2e8f0',
     text: '#0f172a',

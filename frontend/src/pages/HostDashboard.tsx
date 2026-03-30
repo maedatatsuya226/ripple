@@ -480,7 +480,10 @@ export function HostDashboard() {
           {/* テーマ切替 */}
           <div className="flex items-center gap-1 p-1 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.3)', border: `1px solid ${theme.border}` }}>
             {(Object.values(themes) as typeof themes[ThemeName][]).map(t => (
-              <button key={t.name} onClick={() => setTheme(t.name)} className="px-3 py-2 rounded-lg text-sm font-bold transition-all"
+              <button key={t.name} onClick={() => {
+                  setTheme(t.name);
+                  updateHostState(roomId, { ...state, theme: t.name });
+                }} className="px-3 py-2 rounded-lg text-sm font-bold transition-all"
                 style={{ backgroundColor: theme.name === t.name ? t.accent1 : 'transparent', color: theme.name === t.name ? 'white' : theme.textMuted }}>
                 {t.emoji} {t.label}
               </button>
