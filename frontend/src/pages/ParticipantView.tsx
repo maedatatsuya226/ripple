@@ -131,7 +131,7 @@ export function ParticipantView() {
   const [roomIdInput, setRoomIdInput] = useState('');
   const [roomId, setRoomId] = useState(initialRoomId);
 
-  const { state, isConnected } = useRippleStream(roomId);
+  const { state, isConnected } = useRippleStream(roomId, false);
   const { theme } = useTheme();
   const [voted, setVoted] = useState(false);
 

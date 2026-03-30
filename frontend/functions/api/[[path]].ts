@@ -4,7 +4,7 @@
 export const onRequest = async (context: any) => {
   const { request, env, waitUntil } = context;
   const url = new URL(request.url);
-  
+
   // 全体共通のCORS設定 (Pages Functionsでは同一オリジンのため基本不要だが、念のため維持)
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -27,8 +27,8 @@ export const onRequest = async (context: any) => {
     try {
       const body = await request.json() as any;
       if (body.days) days = body.days;
-    } catch (e) {}
-    
+    } catch (e) { }
+
     const token = Array.from(crypto.getRandomValues(new Uint8Array(12)))
       .map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
     await env.RIPPLE_KV.put(
@@ -86,6 +86,9 @@ export const onRequest = async (context: any) => {
 
   // SSE (Server-Sent Events)
   if (pathname === '/api/stream' && request.method === 'GET') {
+    // wantResults=false の参加者には回答集計・リアクションデータを送らない（KV節約）
+    const wantResults = url.searchParams.get('wantResults') !== 'false';
+
     let { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const encoder = new TextEncoder();
@@ -102,20 +105,26 @@ export const onRequest = async (context: any) => {
         let lastStateString = '';
         for (let i = 0; i < 1200; i++) {
           const currentStateRaw = await env.RIPPLE_KV.get(STATE_KEY) || '{"status": "waiting"}';
-          const responsesRaw = await env.RIPPLE_KV.get(RESP_KEY) || '[]';
-          // リアクションを取得して即座に消去 (擬似メッセージキュー)
-          const reactionsRaw = await env.RIPPLE_KV.get(REACT_KEY) || '[]';
-          if (reactionsRaw !== '[]') {
-             await env.RIPPLE_KV.delete(REACT_KEY);
-          }
-          
           const stateObj = JSON.parse(currentStateRaw);
-          const payload = JSON.stringify({ 
-            state: stateObj, 
+
+          let responsesRaw = '[]';
+          let reactionsRaw = '[]';
+
+          if (wantResults) {
+            // ホスト・プレゼン画面のみ: 全データを読み込む
+            responsesRaw = await env.RIPPLE_KV.get(RESP_KEY) || '[]';
+            reactionsRaw = await env.RIPPLE_KV.get(REACT_KEY) || '[]';
+            if (reactionsRaw !== '[]') {
+              await env.RIPPLE_KV.delete(REACT_KEY);
+            }
+          }
+
+          const payload = JSON.stringify({
+            state: stateObj,
             responses: JSON.parse(responsesRaw),
             reactions: JSON.parse(reactionsRaw)
           });
-          
+
           if (payload !== lastStateString || i % 10 === 0 || reactionsRaw !== '[]') {
             await writer.write(encoder.encode(`data: ${payload}\n\n`));
             lastStateString = payload;
@@ -144,7 +153,7 @@ export const onRequest = async (context: any) => {
       reactions.push({ emoji, id: Math.random().toString(36).substring(7), timestamp: Date.now() });
       // 直近30個くらいに制限
       if (reactions.length > 30) reactions = reactions.slice(-30);
-      
+
       await env.RIPPLE_KV.put(REACT_KEY, JSON.stringify(reactions), { expirationTtl: 300 });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     } catch (e) {
@@ -167,7 +176,7 @@ export const onRequest = async (context: any) => {
       const existingIndex = responses.findIndex((r: any) => r.sessionId === sessionId);
       if (existingIndex >= 0) responses[existingIndex].answer = answer;
       else responses.push({ sessionId, answer, timestamp: Date.now() });
-      
+
       await env.RIPPLE_KV.put(RESP_KEY, JSON.stringify(responses), { expirationTtl: 7200 });
       return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     } catch (e) {
