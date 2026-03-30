@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-export type ThemeName = 'neon' | 'medical';
+export type ThemeName = 'neon' | 'medical' | 'hospital';
 
 export interface Theme {
   name: ThemeName;
@@ -73,6 +73,30 @@ export const themes: Record<ThemeName, Theme> = {
     glass: 'rgba(13,27,42,0.7)',
     glowAccent: '0 0 20px rgba(56,189,248,0.2)',
     neonTitle: 'text-shadow: 0 0 8px rgba(56,189,248,0.6)',
+  },
+
+  hospital: {
+    name: 'hospital',
+    label: '病院',
+    emoji: '🚑',
+    bg: '#fafaf9',
+    surface: '#ffffff',
+    border: '#e2e8f0',
+    text: '#0f172a',
+    textMuted: '#64748b',
+    accent1: '#f97316',
+    accent2: '#0ea5e9',
+    optColors: [
+      { bg: '#f97316', text: 'white', shadow: 'rgba(249,115,22,0.3)',  border: '#ea580c' },
+      { bg: '#0ea5e9', text: 'white', shadow: 'rgba(14,165,233,0.3)', border: '#0284c7' },
+      { bg: '#8b5cf6', text: 'white', shadow: 'rgba(139,92,246,0.3)', border: '#7c3aed' },
+      { bg: '#10b981', text: 'white', shadow: 'rgba(16,185,129,0.3)', border: '#059669' },
+    ],
+    optShapes: ['A', 'B', 'C', 'D'],
+    chartColors: ['#f97316', '#0ea5e9', '#8b5cf6', '#10b981'],
+    glass: 'rgba(255,255,255,0.95)',
+    glowAccent: '0 10px 30px rgba(249,115,22,0.1)',
+    neonTitle: 'font-weight: 900; color: #f97316',
   },
 };
 
